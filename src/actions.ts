@@ -509,6 +509,7 @@ const submitButton =
 const markupLabel = /\blabel\s*=\s*["']([^"']+)["']/i;
 const reference = /^[\w$.]+$/;
 const navigation = /(?:^|\.)(?:location|href)$/;
+const externalUrl = /^https?:\/\//;
 const cookieWrite = /(?:^|\.)document\.cookie$/;
 const classicScript = /\.c?js$/i;
 const moduleSyntax = /^[ \t]*(?:import|export)\b/m;
@@ -2075,6 +2076,19 @@ export function groupActions(
 					return;
 				}
 				const callee = child.expression;
+				// Opening an external page (booking, checkout, an integration's
+				// console) can be product intent; the model judges whether it is.
+				const target = child.arguments[0];
+				if (
+					callee.getText(owner.file) === "window.open" &&
+					target &&
+					(ts.isStringLiteral(target) ||
+						ts.isNoSubstitutionTemplateLiteral(target)) &&
+					externalUrl.test(target.text)
+				) {
+					commits = true;
+					addSite(owner, child);
+				}
 				if (ts.isPropertyAccessExpression(callee)) {
 					const method = callee.name.text;
 					const write =

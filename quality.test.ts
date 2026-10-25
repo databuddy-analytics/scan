@@ -117,6 +117,20 @@ export function DocsCode({ code }) {
 	);
 });
 
+test("opening an external page is an action while mail and in-app links are not", () => {
+	const source = `export function Support() {
+  return <>
+    <Item onClick={() => window.open("https://cal.com/team/demo", "_blank")}>Book a demo</Item>
+    <Item onClick={() => window.open("mailto:support@example.com", "_self")}>Email us</Item>
+    <Item onClick={() => window.open("/docs", "_blank")}>Docs</Item>
+  </>;
+}`;
+	const actions = groups(source);
+	assert.equal(at(actions, source, "cal.com").length, 1);
+	assert.equal(at(actions, source, "mailto:").length, 0);
+	assert.equal(at(actions, source, '"/docs"').length, 0);
+});
+
 test("upgrade intent survives while ordinary members navigation is suppressed", () => {
 	const source = `export function FeatureGate({ canUpgrade, currentPlan, requiredPlan }) {
   return <section>
