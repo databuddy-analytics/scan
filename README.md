@@ -28,7 +28,7 @@ The scan sends code to Databuddy's scan API (`api.databuddy.cc`), which classifi
 - `databuddy-scan <folder>` sends code only from that folder. It still reads the rest of the repository to find existing tracking, and sends that as a list of event names and file:line references, so actions tracked elsewhere are not reported as missing.
 - To keep source off Databuddy entirely, set `AI_GATEWAY_API_KEY` to your own [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) key. Requests then go straight to your account and Databuddy receives nothing.
 
-Only Git-tracked files are read. See [how the scanner handles your code](https://www.databuddy.cc/docs/privacy/event-scanner). Tests, examples, symlinks and files that look like they contain secrets are skipped.
+Only Git-tracked files are read. See [how the scanner handles your code](https://www.databuddy.cc/docs/privacy/event-scanner). Tests, examples, symlinks, and files containing a private key, a common provider credential, a JWT or a connection URL with a password are skipped.
 
 ## For agents
 

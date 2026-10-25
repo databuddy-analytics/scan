@@ -70,6 +70,7 @@ const resultSchema = z.object({
 		destination: z.object({
 			host: z.string(),
 			kind: z.enum(["databuddy", "gateway"]),
+			key: z.enum(["shell", "repository"]).optional(),
 		}),
 		zeroDataRetention: z.literal(true),
 		interrupted: z.boolean(),
@@ -106,12 +107,37 @@ const sourceFile =
 const repositoryKey =
 	/^[ \t]*(?:export[ \t]+)?AI_GATEWAY_API_KEY[ \t]*=[ \t]*(.*?)[ \t]*$/m;
 const quoted = /^(["'])(.*)\1$/;
+// A repository's own git config can run commands (core.fsmonitor) on ls-files.
+export const safeGit = ["-c", "core.fsmonitor=false"];
 const routeHandlerLabel =
 	/^(?:GET|POST|PUT|PATCH|DELETE)$|^(?:get|post|put|patch|delete|all) \//;
 const reviewable = /\.(?:[cm]?[jt]sx?|vue|svelte|astro|swift|py)$/;
 const sourceLineBoundary = /(?<=\n)/;
-const secret =
-	/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:sk_live_|sk-proj-|ghp_|github_pat_)[A-Za-z0-9_-]{20,}/;
+// Files holding a private key, a provider credential format or a URL with a
+// password are never sent.
+const secret = new RegExp(
+	[
+		/-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/,
+		/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
+		/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/,
+		/\bwhsec_[A-Za-z0-9]{20,}/,
+		/\bsk-(?:proj|ant|svcacct|admin)-[A-Za-z0-9_-]{20,}/,
+		/\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})/,
+		/\bglpat-[A-Za-z0-9_-]{20,}/,
+		/\bxox[abprs]-[A-Za-z0-9-]{10,}/,
+		/hooks\.slack\.com\/services\/[A-Za-z0-9/]{20,}/,
+		/\bAIza[0-9A-Za-z_-]{35}/,
+		/\bvck_[A-Za-z0-9]{20,}/,
+		/\bnpm_[A-Za-z0-9]{36}/,
+		/\bre_[A-Za-z0-9]{8}_[A-Za-z0-9]{20,}/,
+		/\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/,
+		/\bdbdy_[A-Za-z0-9]{20,}/,
+		/\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+		/\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@"'`]+:[^\s/@"'`$]{3,}@[^\s/@"'`]+/,
+	]
+		.map((pattern) => pattern.source)
+		.join("|")
+);
 const trackingCall =
 	/\b((?:[\w$]+\.)?(?:track[A-Z]\w*|track|capture|logEvent))\s*\((?=\s*(?:["'`{]|[\w$]+\.[\w$]))/;
 const closers: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
@@ -564,7 +590,7 @@ async function readSources(root: string, scope = "") {
 		workspace = new Set<string>(),
 		packageRoots: string[] = [],
 		tracking = new Set<string>();
-	for (const path of execFileSync("git", ["ls-files", "-z"], {
+	for (const path of execFileSync("git", [...safeGit, "ls-files", "-z"], {
 		cwd: root,
 		encoding: "utf8",
 		maxBuffer: 64 * 1024 * 1024,
@@ -691,6 +717,8 @@ async function readSources(root: string, scope = "") {
 
 export interface Destination {
 	host: string;
+	/** Where a gateway key came from: the shell, or the repository's own .env. */
+	key?: "shell" | "repository";
 	kind: "databuddy" | "gateway";
 }
 export interface SentFile {
@@ -730,7 +758,7 @@ export async function scan(
 ) {
 	const { root, scope, output } = options;
 	const git = (...args: string[]) =>
-		execFileSync("git", args, {
+		execFileSync("git", [...safeGit, ...args], {
 			cwd: root,
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
@@ -865,8 +893,9 @@ export async function scan(
 		noActionFiles,
 		catalog,
 	});
+	const shellKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
 	const apiKey =
-		process.env.AI_GATEWAY_API_KEY?.trim() ||
+		shellKey ||
 		repositoryKey
 			.exec(await readFile(join(root, ".env"), "utf8").catch(() => ""))?.[1]
 			?.trim()
@@ -874,7 +903,11 @@ export async function scan(
 		undefined;
 	const timeoutMs = apiKey ? gatewayTimeoutMs : hostedTimeoutMs;
 	const destination: Destination = apiKey
-		? { host: "ai-gateway.vercel.sh", kind: "gateway" }
+		? {
+				host: "ai-gateway.vercel.sh",
+				kind: "gateway",
+				key: shellKey ? "shell" : "repository",
+			}
 		: { host: new URL(hostedScanUrl).host, kind: "databuddy" };
 	if (options.dryRun) {
 		return {

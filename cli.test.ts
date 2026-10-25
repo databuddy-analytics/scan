@@ -7,6 +7,7 @@ import {
 	readFile,
 	realpath,
 	rm,
+	stat,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -74,6 +75,7 @@ function cli(
 		cache = "cache",
 		status = 0,
 		runtime = "node",
+		env = {} as Record<string, string>,
 	} = {}
 ) {
 	const result = spawnSync(
@@ -91,6 +93,7 @@ function cli(
 				SCAN_TEST_MODE: mode,
 				SCAN_TEST_CAPTURE: capture,
 				...(key ? { AI_GATEWAY_API_KEY: key } : {}),
+				...env,
 			},
 		}
 	);
@@ -206,6 +209,67 @@ test("the dry-run payload never carries secrets, env files, symlinked code or ot
 		"src/app/checkout.tsx",
 		"src/app/settings.tsx",
 	]);
+});
+
+test("files with credentials are never sent and the repository cannot run code or redirect the scan", async () => {
+	const hostile = await realpath(await mkdtemp(join(temporary, "hostile-")));
+	await mkdir(join(hostile, "src"));
+	// Assembled at runtime so no credential-shaped literal is committed.
+	const fake = (...parts: string[]) => parts.join("");
+	const credentials = {
+		aws: fake("AKIA", "Z".repeat(16)),
+		anthropic: fake("sk-ant-", "a".repeat(24)),
+		github: fake("ghs_", "b".repeat(36)),
+		slack: fake("xoxb-", "1234567890-abcdef"),
+		google: fake("AIza", "c".repeat(35)),
+		database: fake("postgres://admin:", "hunter2pw", "@db.internal/app"),
+		pem: fake("-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"),
+	};
+	for (const [name, value] of Object.entries(credentials)) {
+		await writeFile(
+			join(hostile, `src/${name}.tsx`),
+			`const credential = "${value}";\n${button(`Use${name}`, `MARKER_${name}`)}`
+		);
+	}
+	// A file that does not parse is sent whole, so it must be checked too.
+	await writeFile(
+		join(hostile, "src/broken.tsx"),
+		`const token = "${credentials.github}" ;; <<<\n${button("Broken", "MARKER_broken")}`
+	);
+	await writeFile(
+		join(hostile, "src/clean.tsx"),
+		button("Clean", "MARKER_clean")
+	);
+	git(hostile, "init", "--quiet");
+	git(hostile, "add", ".");
+	const ran = join(temporary, "fsmonitor-ran");
+	git(hostile, "config", "core.fsmonitor", `touch ${ran}; false`);
+	const dry = JSON.parse(
+		cli([hostile, "--dry-run", "--json"], {
+			key: "",
+			cache: "hostile",
+			env: { DATABUDDY_SCAN_URL: "https://evil.example/collect" },
+		}).stdout
+	) as { destination: { host: string }; payload: unknown };
+	const whole = JSON.stringify(dry.payload);
+	assert.ok(whole.includes("MARKER_clean"));
+	for (const name of [...Object.keys(credentials), "broken"]) {
+		assert.ok(
+			!whole.includes(`MARKER_${name}`),
+			`${name} file reached the payload`
+		);
+	}
+	assert.equal(dry.destination.host, "api.databuddy.cc");
+	await assert.rejects(stat(ran), "the repository's core.fsmonitor ran");
+	const insecure = cli([hostile, "--json"], {
+		cache: "hostile",
+		status: 1,
+		env: { NODE_TLS_REJECT_UNAUTHORIZED: "0" },
+	});
+	assert.match(
+		insecure.stdout + insecure.stderr,
+		/TLS certificate checks are off/
+	);
 });
 
 test("a scan classifies through the chosen destination, reuses its cache and stops cleanly", async () => {

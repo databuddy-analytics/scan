@@ -300,9 +300,16 @@ function retryAfterMs(value: string) {
 
 const gatewayUrl = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
 export const jevModel = "typesafe-ai/jev";
+// Bun loads .env files from the working directory, so a scanned repository
+// could set this; only a local test server may replace the hosted API.
+const scanUrlOverride = process.env.DATABUDDY_SCAN_URL;
 export const hostedScanUrl =
-	process.env.DATABUDDY_SCAN_URL ??
-	"https://api.databuddy.cc/public/v1/scan/evaluate";
+	scanUrlOverride &&
+	/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\//.test(
+		scanUrlOverride
+	)
+		? scanUrlOverride
+		: "https://api.databuddy.cc/public/v1/scan/evaluate";
 
 export async function requestEvaluation(
 	body: string,

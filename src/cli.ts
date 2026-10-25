@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { Command, CommanderError } from "commander";
 import { z } from "zod";
 import { version } from "../package.json";
-import { hash, scan, scanOptionsSchema } from "./scan";
+import { hash, safeGit, scan, scanOptionsSchema } from "./scan";
 import { createTerminal, privacy } from "./terminal";
 
 const optionsSchema = scanOptionsSchema.extend({
@@ -20,7 +20,7 @@ const command = new Command()
 	.version(version)
 	.argument(
 		"[path]",
-		"directory or file to scan; code outside it is never sent",
+		"directory or file to scan; code outside it is never sent, only event names and file:line references to existing tracking",
 		"."
 	)
 	.option("--dry-run", "list every line that would be sent, and send nothing")
@@ -35,11 +35,16 @@ async function main() {
 	});
 	const terminal = createTerminal(options);
 	try {
+		if (!options.dryRun && process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
+			throw new Error(
+				"TLS certificate checks are off (NODE_TLS_REJECT_UNAUTHORIZED=0), so code could be intercepted; unset it to scan, or use --dry-run"
+			);
+		}
 		let root: string, target: string;
 		try {
 			target = await realpath(resolve(options.root));
 			root = await realpath(
-				execFileSync("git", ["rev-parse", "--show-toplevel"], {
+				execFileSync("git", [...safeGit, "rev-parse", "--show-toplevel"], {
 					cwd: (await stat(target)).isFile() ? dirname(target) : target,
 					encoding: "utf8",
 					stdio: ["ignore", "pipe", "pipe"],
