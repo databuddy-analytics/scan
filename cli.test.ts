@@ -30,6 +30,7 @@ interface Summary {
 	cachedBatches: number;
 	classifiedFiles: number;
 	interrupted: boolean;
+	model: string;
 	requestAttempts: number;
 }
 
@@ -302,6 +303,26 @@ test("a scan classifies through the chosen destination, reuses its cache and sto
 		true
 	);
 }, 60_000);
+
+test("a cached hosted answer is never reused for a direct gateway scan", async () => {
+	const hosted = JSON.parse(
+		cli([repo, "--json"], { mode: "valid", key: "", cache: "shared" }).stdout
+	) as { summary: Summary };
+	assert.equal(hosted.summary.cachedBatches, 0);
+	assert.equal(hosted.summary.model, "typesafe-ai/jev");
+	const before = (await requests()).length;
+	const direct = JSON.parse(
+		cli([repo, "--json"], { mode: "valid", cache: "shared" }).stdout
+	) as { summary: Summary };
+	assert.equal(direct.summary.cachedBatches, 0);
+	assert.ok((await requests()).length > before);
+	// The default mode forbids the network, so this run must come from the cache.
+	const again = JSON.parse(
+		cli([repo, "--json"], { cache: "shared" }).stdout
+	) as { summary: Summary };
+	assert.equal(again.summary.requestAttempts, 0);
+	assert.ok(again.summary.cachedBatches > 0);
+});
 
 test("the published package installs as one file and runs under npm and bun", async () => {
 	const pkg = JSON.parse(

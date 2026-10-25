@@ -299,6 +299,7 @@ function retryAfterMs(value: string) {
 }
 
 const gatewayUrl = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
+export const jevModel = "typesafe-ai/jev";
 export const hostedScanUrl =
 	process.env.DATABUDDY_SCAN_URL ??
 	"https://api.databuddy.cc/public/v1/scan/evaluate";
@@ -320,7 +321,7 @@ export async function requestEvaluation(
 				"ai-gateway-protocol-version": "0.0.1",
 				"ai-gateway-auth-method": "api-key",
 				"ai-evaluation-model-specification-version": "4",
-				"ai-model-id": "typesafe-ai/jev",
+				"ai-model-id": jevModel,
 			}
 		: {
 				"Content-Type": "application/json",

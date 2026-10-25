@@ -11,6 +11,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+import { version } from "../package.json";
 import pLimit from "p-limit";
 import { z } from "zod";
 import { groupActions, type Site } from "./actions";
@@ -22,6 +23,7 @@ import {
 	createRequest,
 	parseResponse,
 	hostedScanUrl,
+	jevModel,
 	requestEvaluation,
 	rowSchema,
 	type Row,
@@ -885,8 +887,12 @@ export async function scan(
 		};
 	}
 	const batches = planRequests(segments, catalog);
+	// A cached answer is valid only for the destination, model and scanner
+	// version (which carries the rules) that produced it.
+	const cacheKeyOf = (body: string) =>
+		hash(`${destination.kind}\0${jevModel}\0${version}\0${body}`);
 	const cacheFile = (body: string, kind = "json") =>
-		join(output, "responses", `${hash(body)}.${kind}`);
+		join(output, "responses", `${cacheKeyOf(body)}.${kind}`);
 	const exists = (path: string) =>
 		access(path).then(
 			() => true,
@@ -965,7 +971,7 @@ export async function scan(
 			if (controller.signal.aborted) {
 				return;
 			}
-			const cacheKey = hash(body),
+			const cacheKey = cacheKeyOf(body),
 				at = performance.now();
 			const attempts: Attempt[] = [],
 				call: Call = {
@@ -1124,7 +1130,7 @@ export async function scan(
 			root,
 			scope,
 			head,
-			model: "typesafe-ai/jev",
+			model: jevModel,
 			runId,
 			finishedAt: new Date().toISOString(),
 			destination,

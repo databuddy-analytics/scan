@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import chalk, { Chalk, chalkStderr } from "chalk";
 import { createLogUpdate } from "log-update";
-import { hostedScanUrl, type Row } from "./evaluate.js";
+import { hostedScanUrl, jevModel, type Row } from "./evaluate.js";
 import type { ScanResult, scan } from "./scan.js";
 
 export interface Snapshot {
@@ -23,7 +23,7 @@ const areas = {
 	retention: "Engagement",
 	acquisition: "Acquisition",
 };
-export const privacy = `Code is sent to Databuddy's scan API (${new URL(hostedScanUrl).host}), which classifies it with the Jev model (typesafe-ai/jev) on Vercel AI Gateway under zero data retention: your source is never stored or logged. Only the actions it finds and the functions they call are sent, not whole files, except for Swift and any file it cannot parse; --dry-run lists every line without sending anything. Set AI_GATEWAY_API_KEY to send it to your own Vercel AI Gateway account instead, and Databuddy receives nothing. How the scanner handles your code: https://www.databuddy.cc/docs/privacy/event-scanner`;
+export const privacy = `Code is sent to Databuddy's scan API (${new URL(hostedScanUrl).host}), which classifies it with the Jev model (${jevModel}) on Vercel AI Gateway under zero data retention: your source is never stored or logged. Only the actions it finds and the functions they call are sent, not whole files, except for Swift and any file it cannot parse; --dry-run lists every line without sending anything. Set AI_GATEWAY_API_KEY to send it to your own Vercel AI Gateway account instead, and Databuddy receives nothing. How the scanner handles your code: https://www.databuddy.cc/docs/privacy/event-scanner`;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: Source paths and provider labels must not control the terminal.
 const controls = /[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g;
 const clean = (value: string | number | null | undefined) =>
