@@ -152,9 +152,9 @@ const coverage = {
 	partial:
 		"Some relevant events exist AND you can name the specific remaining outcome, failure or adoption step that none of them records. If the same action and outcome is already recorded, answer covered instead: a hypothetical extra property or adjacent step is not partial.",
 	covered:
-		"The useful product behavior is already tracked directly or via a cataloged shared procedure. Do not duplicate it. The evidence must cover THIS handler, route or helper: an event recorded for a neighbouring action in the same feature, or a route that merely shares a prefix, is not coverage of this one.",
+		"The useful product behavior is already tracked directly or via a cataloged shared procedure. Do not duplicate it. The evidence must cover THIS handler, route or helper: an event recorded for a neighbouring action in the same feature, or a route that merely shares a prefix, is not coverage of this one. A control that only starts a flow, such as a redirect to an OAuth install, is covered when that flow's outcome is tracked where it completes, such as the OAuth callback.",
 	operational:
-		"No first-party user action or product outcome: SDK/collector internals, infrastructure, types, customer event data, or display-only UI. Changing what is on screen is also operational: navigation, filters, date ranges, sorting, pagination or load more, retry or refresh, editing a form field before it is saved, opening or closing a dialog, previewing before a confirm step, switching the active account, and copying a value only used for debugging or support, such as error details, a record ID or a two-factor secret. Copying anything used to set up or share the product is a product action, not operational: an install snippet, client or site ID, API key, SDK or MCP config, endpoint, webhook or share link. Product-owned action handlers are NOT operational just because the file is mostly markup, documentation or marketing. If a person can trigger it and the result persists or matters to the business, it is not operational.",
+		"No first-party user action or product outcome: SDK/collector internals, infrastructure, types, customer event data, or display-only UI. Changing what is on screen is also operational: navigation, filters, date ranges, sorting, pagination or load more, retry or refresh, editing a form field before it is saved, discarding unsaved edits or cancelling, opening or closing a dialog, previewing before a confirm step, switching the active account, and copying a value only used for debugging or support, such as error details, a record ID or a two-factor secret. Copying anything used to set up or share the product is a product action, not operational: an install snippet, client or site ID, API key, SDK or MCP config, endpoint, webhook or share link. Product-owned action handlers are NOT operational just because the file is mostly markup, documentation or marketing. If a person can trigger it and the result persists or matters to the business, it is not operational.",
 	uncertain:
 		"Reserve this ONLY for when the segment's source is genuinely unavailable or truncated so no judgement is possible at all. Do NOT choose uncertain merely because a callee is unresolved or you are unsure: make your best determination from the supplied source and catalog instead.",
 };
@@ -207,7 +207,7 @@ export function createRequest(jobs: Segment[], catalog: Catalog): string {
 			criteria: [
 				"No useful addition, already covered or wrong instrumentation layer",
 				"Optional detailed feature adoption",
-				"Useful missing product outcome or failure",
+				"Useful missing product outcome or failure, including copying setup material such as an install snippet, API key or MCP config",
 				"Critical missing activation, payment or delivered-value outcome",
 			],
 		};
