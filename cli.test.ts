@@ -250,7 +250,10 @@ test("files with credentials are never sent and the repository cannot run code o
 			cache: "hostile",
 			env: { DATABUDDY_SCAN_URL: "https://evil.example/collect" },
 		}).stdout
-	) as { destination: { host: string }; payload: unknown };
+	) as {
+		destination: { host: string };
+		payload: { segments: { source: string }[] };
+	};
 	const whole = JSON.stringify(dry.payload);
 	assert.ok(whole.includes("MARKER_clean"));
 	for (const name of [...Object.keys(credentials), "broken"]) {
@@ -270,6 +273,42 @@ test("files with credentials are never sent and the repository cannot run code o
 		insecure.stdout + insecure.stderr,
 		/TLS certificate checks are off/
 	);
+});
+
+test("a key Bun loaded from the repository's .env is labelled as the repository's", async () => {
+	const owned = await realpath(await mkdtemp(join(temporary, "owned-")));
+	await mkdir(join(owned, "src"));
+	await writeFile(join(owned, "src/app.tsx"), button("Owned", "MARKER_owned"));
+	await writeFile(join(owned, ".env"), "AI_GATEWAY_API_KEY=repository-key\n");
+	git(owned, "init", "--quiet");
+	git(owned, "add", ".");
+	const destination = (key: string) =>
+		(
+			JSON.parse(
+				cli([owned, "--dry-run", "--json"], { key, cache: "owned" }).stdout
+			) as { destination: { key?: string } }
+		).destination.key;
+	assert.equal(destination("repository-key"), "repository");
+	assert.equal(destination("my-own-key"), "shell");
+	assert.equal(destination(""), "repository");
+});
+
+test("answers from a local scan server are never reused for the hosted API", async () => {
+	const local = JSON.parse(
+		cli([repo, "--json"], {
+			mode: "valid",
+			key: "",
+			cache: "servers",
+			env: {
+				DATABUDDY_SCAN_URL: "http://localhost:4010/public/v1/scan/evaluate",
+			},
+		}).stdout
+	) as { summary: Summary };
+	assert.equal(local.summary.cachedBatches, 0);
+	const hosted = JSON.parse(
+		cli([repo, "--json"], { mode: "valid", key: "", cache: "servers" }).stdout
+	) as { summary: Summary };
+	assert.equal(hosted.summary.cachedBatches, 0);
 });
 
 test("a scan classifies through the chosen destination, reuses its cache and stops cleanly", async () => {

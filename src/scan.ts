@@ -893,20 +893,42 @@ export async function scan(
 		noActionFiles,
 		catalog,
 	});
-	const shellKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
-	const apiKey =
-		shellKey ||
-		repositoryKey
-			.exec(await readFile(join(root, ".env"), "utf8").catch(() => ""))?.[1]
-			?.trim()
-			.replace(quoted, "$2") ||
-		undefined;
+	// Bun loads .env files from the working directory into process.env, so a
+	// key there is the repository's even when it appears in the environment.
+	const envFileKeys = new Set<string>();
+	for (const directory of new Set([root, process.cwd()])) {
+		for (const name of [
+			".env",
+			".env.local",
+			".env.development",
+			".env.production",
+		]) {
+			const key = repositoryKey
+				.exec(
+					await readFile(join(directory, name), "utf8").catch(() => "")
+				)?.[1]
+				?.trim()
+				.replace(quoted, "$2");
+			if (key) {
+				envFileKeys.add(key);
+			}
+		}
+	}
+	const environmentKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
+	const repositoryOwned = !environmentKey || envFileKeys.has(environmentKey);
+	const rootKey = repositoryKey
+		.exec(await readFile(join(root, ".env"), "utf8").catch(() => ""))?.[1]
+		?.trim()
+		.replace(quoted, "$2");
+	// Only the environment and the root .env choose the key; the other files
+	// only show whether an environment key came from the repository.
+	const apiKey = environmentKey || rootKey || undefined;
 	const timeoutMs = apiKey ? gatewayTimeoutMs : hostedTimeoutMs;
 	const destination: Destination = apiKey
 		? {
 				host: "ai-gateway.vercel.sh",
 				kind: "gateway",
-				key: shellKey ? "shell" : "repository",
+				key: repositoryOwned ? "repository" : "shell",
 			}
 		: { host: new URL(hostedScanUrl).host, kind: "databuddy" };
 	if (options.dryRun) {
@@ -923,7 +945,9 @@ export async function scan(
 	// A cached answer is valid only for the destination, model and scanner
 	// version (which carries the rules) that produced it.
 	const cacheKeyOf = (body: string) =>
-		hash(`${destination.kind}\0${jevModel}\0${version}\0${body}`);
+		hash(
+			`${destination.kind}\0${destination.host}\0${jevModel}\0${version}\0${body}`
+		);
 	const cacheFile = (body: string, kind = "json") =>
 		join(output, "responses", `${cacheKeyOf(body)}.${kind}`);
 	const exists = (path: string) =>

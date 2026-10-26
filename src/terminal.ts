@@ -112,15 +112,18 @@ export function createTerminal({ json = false }: { json?: boolean } = {}) {
 		destination: DryRun["destination"];
 		files: number;
 	}) {
-		process.stderr.write(
-			files === 0
-				? "Nothing to send: every result is cached from an earlier scan.\n"
-				: destination.kind === "databuddy"
-					? `Sending code from ${count(files, "file")} to Databuddy's scan API (${destination.host}). Jev classifies it on Vercel AI Gateway with zero data retention; your source is never stored or logged. Preview with --dry-run, or set AI_GATEWAY_API_KEY to use your own gateway. https://www.databuddy.cc/docs/privacy/event-scanner\n`
-					: destination.key === "repository"
-						? `Sending code from ${count(files, "file")} directly to Vercel AI Gateway (${destination.host}) with zero data retention, billed to the account of the AI_GATEWAY_API_KEY in this repository's .env file, which may not be yours. Databuddy receives nothing. Set AI_GATEWAY_API_KEY in your shell to use your own key.\n`
-						: `Sending code from ${count(files, "file")} directly to your Vercel AI Gateway account (${destination.host}) with zero data retention. Databuddy receives nothing.\n`
-		);
+		const sending = `Sending code from ${count(files, "file")}`;
+		let message: string;
+		if (files === 0) {
+			message = "Nothing to send: every result is cached from an earlier scan.";
+		} else if (destination.kind === "databuddy") {
+			message = `${sending} to Databuddy's scan API (${destination.host}). Jev classifies it on Vercel AI Gateway with zero data retention; your source is never stored or logged. Preview with --dry-run, or set AI_GATEWAY_API_KEY to use your own gateway. https://www.databuddy.cc/docs/privacy/event-scanner`;
+		} else if (destination.key === "repository") {
+			message = `${sending} directly to Vercel AI Gateway (${destination.host}) with zero data retention, billed to the account of the AI_GATEWAY_API_KEY in this repository's .env file, which may not be yours. Databuddy receives nothing. Set AI_GATEWAY_API_KEY in your shell to use your own key.`;
+		} else {
+			message = `${sending} directly to your Vercel AI Gateway account (${destination.host}) with zero data retention. Databuddy receives nothing.`;
+		}
+		process.stderr.write(`${message}\n`);
 	}
 
 	function notes(warnings: string[]) {
