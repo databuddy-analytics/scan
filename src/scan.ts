@@ -11,7 +11,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { version } from "../package.json";
+import { version } from "../package.json" with { type: "json" };
 import pLimit from "p-limit";
 import { z } from "zod";
 import { groupActions, type Site } from "./actions";
@@ -895,25 +895,22 @@ export async function scan(
 	});
 	// Bun loads .env files from the working directory into process.env, so a
 	// key there is the repository's even when it appears in the environment.
-	const envFileKeys = new Set<string>();
-	for (const directory of new Set([root, process.cwd()])) {
-		for (const name of [
-			".env",
-			".env.local",
-			".env.development",
-			".env.production",
-		]) {
-			const key = repositoryKey
-				.exec(
-					await readFile(join(directory, name), "utf8").catch(() => "")
-				)?.[1]
-				?.trim()
-				.replace(quoted, "$2");
-			if (key) {
-				envFileKeys.add(key);
-			}
-		}
-	}
+	const envFiles = [...new Set([root, process.cwd()])].flatMap((directory) =>
+		[".env", ".env.local", ".env.development", ".env.production"].map((name) =>
+			join(directory, name)
+		)
+	);
+	const envFileKeys = new Set(
+		(
+			await Promise.all(
+				envFiles.map((file) => readFile(file, "utf8").catch(() => ""))
+			)
+		)
+			.map((text) =>
+				repositoryKey.exec(text)?.[1]?.trim().replace(quoted, "$2")
+			)
+			.filter((key): key is string => Boolean(key))
+	);
 	const environmentKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
 	const repositoryOwned = !environmentKey || envFileKeys.has(environmentKey);
 	const rootKey = repositoryKey

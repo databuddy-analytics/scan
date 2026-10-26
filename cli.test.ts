@@ -225,12 +225,15 @@ test("files with credentials are never sent and the repository cannot run code o
 		database: fake("postgres://admin:", "hunter2pw", "@db.internal/app"),
 		pem: fake("-----BEGIN ENCRYPTED ", "PRIVATE KEY-----"),
 	};
-	for (const [name, value] of Object.entries(credentials)) {
-		await writeFile(
-			join(hostile, `src/${name}.tsx`),
-			`const credential = "${value}";\n${button(`Use${name}`, `MARKER_${name}`)}`
-		);
-	}
+	await Promise.all(
+		Object.entries(credentials).map(([name, value]) =>
+			writeFile(
+				join(hostile, `src/${name}.tsx`),
+				`const credential = "${value}";\n${button(`Use${name}`, `MARKER_${name}`)}`
+			)
+		)
+	);
+
 	// A file that does not parse is sent whole, so it must be checked too.
 	await writeFile(
 		join(hostile, "src/broken.tsx"),
